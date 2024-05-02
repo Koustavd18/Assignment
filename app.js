@@ -1,31 +1,58 @@
 const express = require("express");
+const multer = require("multer");
 const fs = require("fs");
+const path = require("path");
+
 const app = express();
-// const multer = require("multer");
+const PORT = 1337;
 
-app.use(express.json());
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
-// const storage = multer.memoryStorage();
-// const upload = multer({ storage: storage });
+app.post("/uploadFile", upload.single("uploadedFile"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
 
-app.post("/uploadFile", (req, res, next) => {
-  req.on("data", (chunk) => {
-    const singleChunk = Math.floor(chunk.length / 5);
-    const data = [];
-    for (let i = 0; i <= chunk.length; i += singleChunk) {
-      const dividedChunks = chunk.slice(i, i + singleChunk);
-      data.push(dividedChunks);
+  const fileBuffer = req.file.buffer;
+  const fileSize = fileBuffer.length;
+  const chunkSize = Math.ceil(fileSize / 5);
+
+  try {
+    const processedChunks = [];
+
+    for (let i = 0; i < 5; i++) {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, fileSize);
+      const chunkData = fileBuffer.slice(start, end);
+
+      function appendCharacterToLines(buffer, character) {
+        const lines = buffer.toString().split("\n");
+        const processedLines = lines.map((line) => `${character}${line}`);
+        return Buffer.from(processedLines.join("\n"));
+      }
+
+      const processedDataR = appendCharacterToLines(chunkData, "R");
+
+      const processedData2 = appendCharacterToLines(processedDataR, "2");
+
+      processedChunks.push(processedData2);
     }
 
-    fs.writeFileSync("uploadedFile.txt", chunk);
-  });
+    const concatenatedData = Buffer.concat(processedChunks);
 
-  res.status(200).json({
-    sttaus: "success",
-    data: req.body,
-  });
+    const outputPath = path.join(__dirname, "processedFile.txt");
+    fs.writeFileSync(outputPath, concatenatedData);
+
+    res
+      .status(200)
+      .json({ message: "File uploaded, processed, and saved successfully" });
+  } catch (err) {
+    console.error("Error processing file:", err);
+    res.status(500).json({ error: "Failed to process file" });
+  }
 });
 
-app.listen(1337, () => {
-  console.log("server is running in Port 1337");
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
